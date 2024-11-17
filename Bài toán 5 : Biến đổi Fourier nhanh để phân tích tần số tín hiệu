@@ -1,0 +1,44 @@
+#include <iostream>
+#include <cufft.h>
+#include <cmath>
+
+int main() {
+    int N = 1024;
+    cufftComplex *d_signal, *d_output;
+
+    cudaMalloc((void**)&d_signal, sizeof(cufftComplex) * N);
+    cudaMalloc((void**)&d_output, sizeof(cufftComplex) * N);
+
+    // Tạo tín hiệu với một tần số chủ yếu
+    cufftComplex *h_signal = new cufftComplex[N];
+    for (int i = 0; i < N; ++i) {
+        h_signal[i].x = cos(2 * M_PI * 50 * i / N);  // Sóng sin 50Hz
+        h_signal[i].y = 0;
+    }
+
+    cudaMemcpy(d_signal, h_signal, sizeof(cufftComplex) * N, cudaMemcpyHostToDevice);
+
+    // Khởi tạo cuFFT plan
+    cufftHandle plan;
+    cufftPlan1d(&plan, N, CUFFT_C2C, 1);
+
+    // Thực hiện FFT
+    cufftExecC2C(plan, d_signal, d_output, CUFFT_FORWARD);
+
+    // Sao chép kết quả về host
+    cudaMemcpy(h_signal, d_output, sizeof(cufftComplex) * N, cudaMemcpyDeviceToHost);
+
+    // Phân tích tần số (chỉ in phần thực)
+    std::cout << "Frequency analysis:\n";
+    for (int i = 0; i < N; ++i) {
+        std::cout << i << ": " << h_signal[i].x << std::endl;  // Hiển thị phần thực
+    }
+
+    // Dọn dẹp bộ nhớ
+    cufftDestroy(plan);
+    cudaFree(d_signal);
+    cudaFree(d_output);
+    delete[] h_signal;
+
+    return 0;
+}
