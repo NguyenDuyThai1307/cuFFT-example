@@ -1,0 +1,49 @@
+#include <iostream>
+#include <cufft.h>
+#include <cuda_runtime.h>
+
+int main() {
+    int width = 256, height = 256;  // Kích thước ảnh
+    cufftComplex *d_image, *d_output;
+
+    cudaMalloc((void**)&d_image, sizeof(cufftComplex) * width * height);
+    cudaMalloc((void**)&d_output, sizeof(cufftComplex) * width * height);
+
+    // Tạo ảnh giả (sóng sin)
+    cufftComplex *h_image = new cufftComplex[width * height];
+    for (int i = 0; i < width; ++i) {
+        for (int j = 0; j < height; ++j) {
+            h_image[i * height + j].x = cos(2 * M_PI * (i + j) / 20);  // Sóng sin
+            h_image[i * height + j].y = 0;
+        }
+    }
+
+    cudaMemcpy(d_image, h_image, sizeof(cufftComplex) * width * height, cudaMemcpyHostToDevice);
+
+    // Khởi tạo cuFFT plan 2D
+    cufftHandle plan;
+    cufftPlan2d(&plan, height, width, CUFFT_C2C);
+
+    // Thực hiện FFT
+    cufftExecC2C(plan, d_image, d_output, CUFFT_FORWARD);
+
+    // Sao chép kết quả về host
+    cudaMemcpy(h_image, d_output, sizeof(cufftComplex) * width * height, cudaMemcpyDeviceToHost);
+
+    // In kết quả
+    std::cout << "FFT Output (real part):\n";
+    for (int i = 0; i < width; ++i) {
+        for (int j = 0; j < height; ++j) {
+            std::cout << h_image[i * height + j].x << " ";
+        }
+        std::cout << std::endl;
+    }
+
+    // Dọn dẹp bộ nhớ
+    cufftDestroy(plan);
+    cudaFree(d_image);
+    cudaFree(d_output);
+    delete[] h_image;
+
+    return 0;
+}
