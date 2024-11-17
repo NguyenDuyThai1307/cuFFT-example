@@ -1,0 +1,63 @@
+#include <iostream>
+#include <cufft.h>
+#include <cmath>
+
+int main() {
+    int N = 1024;  // Kích thước tín hiệu
+    cufftComplex *d_signal, *d_output, *d_filtered;
+
+    cudaMalloc((void**)&d_signal, sizeof(cufftComplex) * N);
+    cudaMalloc((void**)&d_output, sizeof(cufftComplex) * N);
+    cudaMalloc((void**)&d_filtered, sizeof(cufftComplex) * N);
+
+    // Tạo tín hiệu sóng sin
+    cufftComplex *h_signal = new cufftComplex[N];
+    for (int i = 0; i < N; ++i) {
+        h_signal[i].x = cos(2 * M_PI * 50 * i / N) + cos(2 * M_PI * 150 * i / N);  // Sóng sin 50Hz và 150Hz
+        h_signal[i].y = 0;
+    }
+
+    cudaMemcpy(d_signal, h_signal, sizeof(cufftComplex) * N, cudaMemcpyHostToDevice);
+
+    // Khởi tạo cuFFT plan
+    cufftHandle plan;
+    cufftPlan1d(&plan, N, CUFFT_C2C, 1);
+
+    // Thực hiện FFT
+    cufftExecC2C(plan, d_signal, d_output, CUFFT_FORWARD);
+
+    // Lọc tần số cao
+    cufftComplex *h_filtered = new cufftComplex[N];
+    cudaMemcpy(h_filtered, d_output, sizeof(cufftComplex) * N, cudaMemcpyDeviceToHost);
+
+    for (int i = 0; i < N; ++i) {
+        if (i > 100) {  // Cắt tần số trên 100Hz
+            h_filtered[i].x = 0;
+            h_filtered[i].y = 0;
+        }
+    }
+
+    cudaMemcpy(d_filtered, h_filtered, sizeof(cufftComplex) * N, cudaMemcpyHostToDevice);
+
+    // Thực hiện IFFT
+    cufftExecC2C(plan, d_filtered, d_output, CUFFT_INVERSE);
+
+    // Sao chép kết quả về host
+    cudaMemcpy(h_signal, d_output, sizeof(cufftComplex) * N, cudaMemcpyDeviceToHost);
+
+    // In kết quả
+    std::cout << "Filtered Signal:\n";
+    for (int i = 0; i < N; ++i) {
+        std::cout << h_signal[i].x << std::endl;
+    }
+
+    // Dọn dẹp bộ nhớ
+    cufftDestroy(plan);
+    cudaFree(d_signal);
+    cudaFree(d_output);
+    cudaFree(d_filtered);
+    delete[] h_signal;
+    delete[] h_filtered;
+
+    return 0;
+}
